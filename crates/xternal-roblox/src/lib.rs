@@ -17,6 +17,12 @@
 //!
 //! [`MemoryReader`]: xternal_engine::MemoryReader
 
+// `read_ptr` and the offset pointer-chains assume 8-byte pointers. Modern Roblox
+// is x64-only, so we make that a build-time guarantee rather than a 32-bit path
+// we'd never run.
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("xternal-roblox assumes 8-byte pointers (x64-only Roblox)");
+
 pub mod instance;
 pub mod offsets;
 pub mod process;
