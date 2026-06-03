@@ -5,7 +5,13 @@
 use std::mem;
 
 use thiserror::Error;
-use windows::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, HMODULE};
+use windows::Win32::Foundation::{
+    CloseHandle, ERROR_NO_MORE_FILES, GetLastError, HANDLE, HMODULE,
+};
+use windows::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+    TH32CS_SNAPPROCESS,
+};
 use windows::Win32::System::ProcessStatus::{
     K32EnumProcessModulesEx, LIST_MODULES_ALL,
 };
@@ -28,6 +34,12 @@ pub enum ProcessError {
 
     #[error("process {pid} has no loaded modules")]
     NoModules { pid: u32 },
+
+    #[error("CreateToolhelp32Snapshot failed (Win32 {win32:#010x})")]
+    SnapshotFailed { win32: u32 },
+
+    #[error("process-list enumeration failed (Win32 {win32:#010x})")]
+    EnumProcessesFailed { win32: u32 },
 }
 
 // ── handle type ──────────────────────────────────────────────────────────────
@@ -62,6 +74,13 @@ impl Drop for ProcessHandle {
     }
 }
 
+// SAFETY: a Win32 process handle is a process-wide kernel object, not tied to
+// the thread that opened it. `ReadProcessMemory` and `CloseHandle` are valid
+// from any thread, so moving ownership across threads is sound. The engine
+// requires `MemoryReader: Send` precisely so the live reader (which owns one of
+// these) can run on its own thread.
+unsafe impl Send for ProcessHandle {}
+
 // ── public API ───────────────────────────────────────────────────────────────
 
 /// Open a process by PID with VM-read rights and resolve its main-module base
@@ -89,6 +108,69 @@ pub fn open(pid: u32) -> Result<ProcessHandle, ProcessError> {
     let raw = try_open(pid)?;
     let base_address = resolve_base(raw, pid)?;
     Ok(ProcessHandle { raw, pid, base_address })
+}
+
+/// Enumerate the PIDs of every running process whose image name matches `name`
+/// (case-insensitive), via a Toolhelp process snapshot.
+///
+/// This is the primitive that replaces AHK's `ProcessExist` — but it returns
+/// *all* matches rather than the first, because Toolhelp enumeration order is
+/// not a documented contract (it is not launch order). With multiple Roblox
+/// instances running, "first match" would attach to a semi-arbitrary one; the
+/// `Vec` forces the caller to disambiguate instead of silently guessing.
+///
+/// Three honest outcomes:
+/// - `Ok(vec![])` — no such process is running (normal, not an error).
+/// - `Ok(vec![..])` — one or more matches.
+/// - `Err(_)` — the lookup machinery itself failed (bad snapshot / enumeration).
+pub fn find_pids_by_name(name: &str) -> Result<Vec<u32>, ProcessError> {
+    // SAFETY: FFI. The snapshot is a kernel handle closed by the guard below.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }
+        .map_err(|e| ProcessError::SnapshotFailed { win32: e.code().0 as u32 })?;
+    let _guard = SnapshotGuard(snapshot);
+
+    let mut entry = PROCESSENTRY32W {
+        // Required by the API: the struct must announce its own size before the
+        // first call, or Process32FirstW rejects it.
+        dwSize: mem::size_of::<PROCESSENTRY32W>() as u32,
+        ..Default::default()
+    };
+
+    // Seed the walk. A failure here is a genuine error (the list is never empty
+    // on a live system, so this is not the end-of-enumeration signal).
+    unsafe { Process32FirstW(snapshot, &mut entry) }
+        .map_err(|e| ProcessError::EnumProcessesFailed { win32: e.code().0 as u32 })?;
+
+    let mut pids = Vec::new();
+    loop {
+        if exe_name_matches(&entry.szExeFile, name) {
+            pids.push(entry.th32ProcessID);
+        }
+
+        // Advance. Toolhelp signals "end of list" by *failing* with
+        // ERROR_NO_MORE_FILES — that is the clean terminator, NOT an error.
+        // Any other failure code is a real enumeration error worth propagating,
+        // which is the whole reason this returns Result and not a bare Vec.
+        match unsafe { Process32NextW(snapshot, &mut entry) } {
+            Ok(()) => continue,
+            Err(e) if e.code() == ERROR_NO_MORE_FILES.to_hresult() => break,
+            Err(e) => {
+                return Err(ProcessError::EnumProcessesFailed { win32: e.code().0 as u32 });
+            }
+        }
+    }
+
+    Ok(pids)
+}
+
+/// Convenience over [`find_pids_by_name`] for the single-instance case: returns
+/// the first match, or `Ok(None)` if none are running.
+///
+/// This deliberately does *not* disambiguate — with several instances it returns
+/// an arbitrary one. The attach path must not use it for that reason; use
+/// `RobloxReader::attach_by_name`, which makes "more than one" a typed error.
+pub fn find_pid_by_name(name: &str) -> Result<Option<u32>, ProcessError> {
+    Ok(find_pids_by_name(name)?.into_iter().next())
 }
 
 // ── internals ────────────────────────────────────────────────────────────────
@@ -183,4 +265,63 @@ fn resolve_base(handle: HANDLE, pid: u32) -> Result<usize, ProcessError> {
 #[inline]
 fn slot_bytes(modules: &[HMODULE]) -> u32 {
     (modules.len() * mem::size_of::<HMODULE>()) as u32
+}
+
+/// RAII closer for the Toolhelp snapshot handle, so every exit path from
+/// [`find_pids_by_name`] (including the early `?` on enumeration failure) closes
+/// it. Unlike the AHK original, no leak-on-error path exists.
+struct SnapshotGuard(HANDLE);
+
+impl Drop for SnapshotGuard {
+    fn drop(&mut self) {
+        // SAFETY: `0` came from a successful CreateToolhelp32Snapshot and is
+        // closed exactly once, here.
+        unsafe { let _ = CloseHandle(self.0); }
+    }
+}
+
+/// Case-insensitive compare of a `PROCESSENTRY32W::szExeFile` field (a
+/// NUL-padded UTF-16 array) against `name`. Process names are ASCII, so an
+/// ASCII-case-insensitive match is correct and avoids Unicode-folding cost.
+fn exe_name_matches(sz_exe_file: &[u16], name: &str) -> bool {
+    let end = sz_exe_file.iter().position(|&c| c == 0).unwrap_or(sz_exe_file.len());
+    String::from_utf16_lossy(&sz_exe_file[..end]).eq_ignore_ascii_case(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a NUL-padded UTF-16 `szExeFile`-style buffer from a string.
+    fn sz(s: &str) -> [u16; 260] {
+        let mut buf = [0u16; 260];
+        for (i, unit) in s.encode_utf16().enumerate() {
+            buf[i] = unit;
+        }
+        buf
+    }
+
+    #[test]
+    fn exe_name_matches_is_case_insensitive_and_stops_at_nul() {
+        // The trailing NUL padding must NOT bleed into the comparison — a
+        // positive match here proves the NUL terminator is honored.
+        let buf = sz("RobloxPlayerBeta.exe");
+        assert!(exe_name_matches(&buf, "robloxplayerbeta.exe"));
+        assert!(exe_name_matches(&buf, "ROBLOXPLAYERBETA.EXE"));
+    }
+
+    #[test]
+    fn exe_name_matches_rejects_a_different_name() {
+        assert!(!exe_name_matches(&sz("notepad.exe"), ROBLOX_PROCESS_NAME));
+    }
+
+    /// Smoke test for the live FFI path: enumerating for a name that cannot
+    /// exist must walk the entire snapshot, hit ERROR_NO_MORE_FILES, and return
+    /// `Ok(empty)` — not an `Err`. If the terminator were mishandled (treated as
+    /// a failure), this `unwrap` would panic.
+    #[test]
+    fn find_pids_by_name_returns_empty_for_a_nonexistent_process() {
+        let pids = find_pids_by_name("definitely-not-real-7f3a9c.exe").unwrap();
+        assert!(pids.is_empty());
+    }
 }
