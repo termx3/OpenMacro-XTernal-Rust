@@ -10,5 +10,5 @@ repository.workspace = true
 # This crate deliberately depends on NEITHER windows nor egui — that is what
 # makes the control logic unit-testable against a fake MemoryReader.
 [dependencies]
-# thiserror = { workspace = true }   # enable when you replace the hand-rolled ReadError
-# serde = { workspace = true }       # enable if engine types need (de)serialization
+thiserror = { workspace = true }
+serde = { workspace = true }

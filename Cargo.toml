@@ -1,5 +1,5 @@
 # ============================================================================
-#  OpenMacro XTernal (Rust) — workspace manifest
+#  OpenMacro XTernal (Rust) workspace manifest
 #  SPDX-License-Identifier: AGPL-3.0-only
 # ============================================================================
 [workspace]
@@ -30,31 +30,31 @@ rust-version = "1.85"
 # ----------------------------------------------------------------------------
 [workspace.dependencies]
 # --- serialization (settings.json / offsets.json) ---
-# serde = { version = "1", features = ["derive"] }
-# serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 # --- errors / logging ---
-# thiserror = "2"                 # typed errors at library boundaries
-# anyhow = "1"                    # top-level glue in the binary
-# tracing = "0.1"
-# tracing-subscriber = "0.3"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
 # --- GUI (xternal) ---
-# eframe = "0.31"                 # egui application framework
-# egui = "0.31"
-# global-hotkey = "0.6"           # F1–F4 global hotkeys
-# enigo = "0.3"                   # SendInput (mouse/keyboard)
+eframe = "0.31"
+egui = "0.31"
+global-hotkey = "0.6"
+enigo = "0.3"
 # --- Windows platform (xternal-roblox) ---
-# windows = { version = "0.59", features = [
-#     "Win32_System_Threading",
-#     "Win32_System_ProcessStatus",
-#     "Win32_System_Diagnostics_Debug",
-#     "Win32_Foundation",
-# ] }
+windows = { version = "0.59", features = [
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_Foundation",
+] }
 # --- services (xternal-services) ---
-# ureq = "2"                      # blocking HTTP (no async runtime needed)
-# self_update = "0.42"            # GitHub-release self-updater
-# directories = "6"               # %APPDATA% paths
+ureq = "2"
+self_update = "0.42"
+directories = "6"
 # --- build (xternal/build.rs) ---
-# winresource = "0.1"             # embed icon + version + manifest
+winresource = "0.1"
 
 [profile.release]
 lto = "thin"

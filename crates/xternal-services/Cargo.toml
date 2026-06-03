@@ -8,10 +8,9 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-# Enable as you implement each service:
-# serde = { workspace = true }
-# serde_json = { workspace = true }
-# ureq = { workspace = true }          # update check / remote offsets / webhook POST
-# self_update = { workspace = true }
-# directories = { workspace = true }   # %APPDATA%\OpenMacro\XTernal
-# thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ureq = { workspace = true }
+self_update = { workspace = true }
+directories = { workspace = true }
+thiserror = { workspace = true }
