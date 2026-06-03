@@ -1,0 +1,7 @@
+# Pin the toolchain so `cargo build` is reproducible for contributors.
+[toolchain]
+channel = "stable"
+# The Windows target is the native host here, so it's already installed. If a
+# contributor builds from another host, uncomment to have rustup fetch it:
+# targets = ["x86_64-pc-windows-msvc"]
+# components = ["rustfmt", "clippy"]

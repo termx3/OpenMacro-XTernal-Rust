@@ -3,5 +3,29 @@
 version = 4
 
 [[package]]
-name = "RUST"
+name = "xtask"
+version = "0.1.0"
+
+[[package]]
+name = "xternal"
+version = "0.1.0"
+dependencies = [
+ "xternal-engine",
+ "xternal-roblox",
+ "xternal-services",
+]
+
+[[package]]
+name = "xternal-engine"
+version = "0.1.0"
+
+[[package]]
+name = "xternal-roblox"
+version = "0.1.0"
+dependencies = [
+ "xternal-engine",
+]
+
+[[package]]
+name = "xternal-services"
 version = "0.1.0"

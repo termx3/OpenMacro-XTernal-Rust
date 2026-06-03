@@ -1,7 +1,61 @@
-[package]
-name = "RUST"
+# ============================================================================
+#  OpenMacro XTernal (Rust) — workspace manifest
+#  SPDX-License-Identifier: AGPL-3.0-only
+# ============================================================================
+[workspace]
+resolver = "2"
+members = [
+    "crates/xternal",          # [[bin]] the app: egui UI + wiring  (Main.ahk + ui/)
+    "crates/xternal-engine",   # [lib]  pure macro brain            (Fish/Totem/Appraise core)
+    "crates/xternal-roblox",   # [lib]  Windows platform layer      (Process/Memory/Read/Offsets)
+    "crates/xternal-services", # [lib]  slow/fallible I/O           (Settings/Update/Webhook/Remote)
+    "xtask",                   # [[bin]] build / release automation
+]
+
+# Fields shared by every crate via `<field>.workspace = true`.
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-only"
+authors = ["@anorexc"]
+repository = "https://github.com/termx3/OpenMacro-XTernal"
+rust-version = "1.85"
 
-[dependencies]
+# ----------------------------------------------------------------------------
+# Single dependency catalogue for the whole workspace. A member opts in with
+# `foo = { workspace = true }`. Entries are COMMENTED OUT so the scaffold builds
+# with zero network access (the stubs compile on `std` alone). Uncomment an
+# entry here AND the matching line in the member's Cargo.toml as you implement
+# each layer.
+# ----------------------------------------------------------------------------
+[workspace.dependencies]
+# --- serialization (settings.json / offsets.json) ---
+# serde = { version = "1", features = ["derive"] }
+# serde_json = "1"
+# --- errors / logging ---
+# thiserror = "2"                 # typed errors at library boundaries
+# anyhow = "1"                    # top-level glue in the binary
+# tracing = "0.1"
+# tracing-subscriber = "0.3"
+# --- GUI (xternal) ---
+# eframe = "0.31"                 # egui application framework
+# egui = "0.31"
+# global-hotkey = "0.6"           # F1–F4 global hotkeys
+# enigo = "0.3"                   # SendInput (mouse/keyboard)
+# --- Windows platform (xternal-roblox) ---
+# windows = { version = "0.59", features = [
+#     "Win32_System_Threading",
+#     "Win32_System_ProcessStatus",
+#     "Win32_System_Diagnostics_Debug",
+#     "Win32_Foundation",
+# ] }
+# --- services (xternal-services) ---
+# ureq = "2"                      # blocking HTTP (no async runtime needed)
+# self_update = "0.42"            # GitHub-release self-updater
+# directories = "6"               # %APPDATA% paths
+# --- build (xternal/build.rs) ---
+# winresource = "0.1"             # embed icon + version + manifest
+
+[profile.release]
+lto = "thin"
+strip = true

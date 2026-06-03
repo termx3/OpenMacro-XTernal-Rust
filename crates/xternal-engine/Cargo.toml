@@ -1,0 +1,14 @@
+[package]
+name = "xternal-engine"
+description = "Pure macro brain: control loop, PID controller, phase state machine. No platform deps."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+# This crate deliberately depends on NEITHER windows nor egui — that is what
+# makes the control logic unit-testable against a fake MemoryReader.
+[dependencies]
+# thiserror = { workspace = true }   # enable when you replace the hand-rolled ReadError
+# serde = { workspace = true }       # enable if engine types need (de)serialization

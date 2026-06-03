@@ -1,0 +1,10 @@
+# Cargo configuration for the XTernal workspace.
+
+# `cargo xtask <task>` → runs the automation binary (cargo-xtask pattern).
+[alias]
+xtask = "run --package xtask --"
+
+# Pin the default build target (host == this triple on Windows). Uncomment to
+# enforce a single target dir layout across contributors:
+# [build]
+# target = "x86_64-pc-windows-msvc"

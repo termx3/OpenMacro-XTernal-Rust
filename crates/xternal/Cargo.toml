@@ -1,0 +1,29 @@
+[package]
+name = "xternal"
+description = "OpenMacro XTernal — external memory macro for Roblox Fisch (Rust)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+default-run = "xternal"
+
+[[bin]]
+name = "xternal"
+path = "src/main.rs"
+
+[dependencies]
+xternal-engine = { path = "../xternal-engine" }
+xternal-roblox = { path = "../xternal-roblox" }
+xternal-services = { path = "../xternal-services" }
+# Enable when wiring the GUI / hotkeys / logging:
+# eframe = { workspace = true }
+# egui = { workspace = true }
+# global-hotkey = { workspace = true }
+# enigo = { workspace = true }
+# anyhow = { workspace = true }
+# tracing = { workspace = true }
+# tracing-subscriber = { workspace = true }
+
+# [build-dependencies]
+# winresource = { workspace = true }   # embed icon + manifest (see build.rs)
